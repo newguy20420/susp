@@ -34,9 +34,20 @@ function shouldSkipEvent($eventDate, $currentDateTime) {
     return $hoursDiff < -4 || $hoursDiff > 24;
 }
 
+// Time zones
+$timeZones = [
+    'Eastern' => 'America/New_York',
+    'Central' => 'America/Chicago',
+    'Pacific' => 'America/Los_Angeles'
+];
+
 $currentDateTime = new DateTime("now", new DateTimeZone('America/Chicago'));
 
-$m3u8Content = "#EXTM3U\n\n";
+$m3uFiles = [];
+
+foreach ($timeZones as $label => $tz) {
+    $m3uFiles[$label] = "#EXTM3U\n\n";
+}
 
 foreach ($data as $match) {
     if (shouldSkipEvent($match['date'], $currentDateTime)) {
@@ -50,25 +61,30 @@ foreach ($data as $match) {
     foreach ($match['sources'] as $source) {
         $sourceName = ucwords(strtolower($source['source']));
         $id = $source['id'];
-        $dateTime = new DateTime("@".($match['date'] / 1000));
-        $dateTime->setTimezone(new DateTimeZone('Australia/Sydney'));
-        $formattedTime = $dateTime->format('h:i A');
-        $formattedDate = $dateTime->format('d/m/Y');
 
-        if ($category === "24/7 Live") {
-            $m3u8Content .= "#EXTINF:-1 tvg-name=\"{$match['title']}\" tvg-logo=\"{$poster}\" group-title=\"{$categoryFormatted}\",{$match['title']}\n";
-        } else {
-            $matchName = "{$formattedTime} - {$match['title']} [{$sourceName}] - ({$formattedDate})";
-            $m3u8Content .= "#EXTINF:-1 tvg-name=\"{$match['title']}\" tvg-logo=\"{$poster}\" group-title=\"{$categoryFormatted}\",{$matchName}\n";
+        foreach ($timeZones as $label => $tz) {
+            $dateTime = new DateTime("@".($match['date'] / 1000));
+            $dateTime->setTimezone(new DateTimeZone($tz));
+            $formattedTime = $dateTime->format('h:i A');
+            $formattedDate = $dateTime->format('d/m/Y');
+
+            if ($category === "24/7 Live") {
+                $m3uFiles[$label] .= "#EXTINF:-1 tvg-name=\"{$match['title']}\" tvg-logo=\"{$poster}\" group-title=\"{$categoryFormatted}\",{$match['title']}\n";
+            } else {
+                $matchName = "{$formattedTime} - {$match['title']} [{$sourceName}] - ({$formattedDate})";
+                $m3uFiles[$label] .= "#EXTINF:-1 tvg-name=\"{$match['title']}\" tvg-logo=\"{$poster}\" group-title=\"{$categoryFormatted}\",{$matchName}\n";
+            }
+
+            $m3uFiles[$label] .= "https://rr.vipstreams.in/{$sourceName}/js/{$id}/1/playlist.m3u8\n";
         }
-
-        // Removed the random string, now just append the URL without '?id'
-        $m3u8Content .= "https://rr.vipstreams.in/{$sourceName}/js/{$id}/1/playlist.m3u8\n";
     }
 }
 
-file_put_contents('streamed.m3u8', $m3u8Content);
-
-echo "M3U8 file has been saved as streamed.m3u8.\n";
+// Save M3U files for each time zone
+foreach ($m3uFiles as $label => $content) {
+    $filename = "streamed_" . strtolower($label) . ".m3u8";
+    file_put_contents($filename, $content);
+    echo "M3U8 file has been saved as {$filename}.\n";
+}
 
 ?>
